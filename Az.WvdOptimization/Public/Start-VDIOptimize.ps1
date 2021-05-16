@@ -67,19 +67,52 @@ it is nearly impossible to get it back.  Please review the lists below and comme
 #>
 Function Start-VDIOptimize
 {
+    <#
+    .SYNOPSIS
+        The Start-VDIOptimize command is used provide an optimized Windows 10 experience when deployed for Windows Virtual Desktop
+    .DESCRIPTION
+        The Start-VDIOptimize command can be run stand-alone or with parameters as defined in parameter section. The command will attempt to determine the OS version (2004, 2009, 20H1, etc) or it can be supplied manually. Based on the OS version and the Optimizations selected, specific configuration files will be fetched to optimize the installation. Omitting any parameters will use the OS version of the computer it's launched from and run 'All' optimizations. Logs for all actions can be found in the Windows Event Log under 'Applications and Services Logs\Virtual Desktop Optimization'. The default output of the command will have an EULA acceptance followed by progress bars for the optimizations to be run. All output can be supressed using the -Quiet parameter.  For detailed information on-screen use -Verbose.
+    .EXAMPLE
+        PS C:\> Start-VDIOptimize
+        Default command runs all optimizations and fetches the current OS version from the registry.
+    .EXAMPLE
+        PS C:\> Start-VDIOptimize -Optimizations AppxPackages,ScheduledTasks,Services,Autologgers -Verbose
+        The example above will only optimize the selected optimizations and provide a verbose output to the screen.
+    .EXAMPLE
+        PS C:\> Start-VDIOptimize -WindowsVersion 2009 -Quiet
+        The example above attempts to optimize the system for Windows 10 2009 (20H2) with no output.
+    .INPUTS
+        This command does not accept any input.
+    .OUTPUTS
+        Minimal console output with the option to run quietly.
+    #>
     [Cmdletbinding(DefaultParameterSetName = "Default")]
     Param (
-        [System.String]$WindowsVersion = (Get-ItemProperty "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\").ReleaseId,
+        [Parameter(Position=0,ParameterSetName="Default")]
+        [System.String]
+        # Numberic based sub-version for Windows 10 Multi-Session, valid values are: 1909, 2004, 2009, 2104
+        [ValidateSet("1909","2004","2009","2104")]
+        $WindowsVersion = (Get-ItemProperty "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\").ReleaseId,
 
+        [Parameter(Position=1,ParameterSetName="Default")]
+        [System.String[]]
+        # List of potential optimizations. Provide multiple values separated by commas or use 'All'
         [ValidateSet('All', 'WindowsMediaPlayer', 'AppxPackages', 'ScheduledTasks', 'DefaultUserSettings', 'Autologgers', 'Services', 'NetworkOptimizations', 'LocalPolicySettings', 'DiskCleanup')] 
-        [String[]]$Optimizations = "All",
+        $Optimizations = "All",
 
-        [Switch]$Restart,
-
+        [Parameter(Position=2,ParameterSetName="Default")]
         [Switch]
+        # Switch based parameter to initiate a system reboot after the optimizations are complete.
+        $Restart,
+
+        [Parameter(Position=3,ParameterSetName="Default")]
+        [Switch]
+        # Switch based parameter to auto accept the EULA terms..
         $AcceptEULA,
 
+        [Parameter(Position=4,ParameterSetName="Default")]
         [Switch]
+        # Switch based parameter to suppress all on-screen output.
         $Quiet
     )
     BEGIN
@@ -104,7 +137,7 @@ Function Start-VDIOptimize
             Write-Warning ("One or more paths were not found")
         }
         $source = $PSCmdlet.MyInvocation.MyCommand.ToString() -replace ("Start-","")
-        $RegPath = "HKLM:\SOFTWARE\Microsoft\VDIOptimize"
+        #$RegPath = "HKLM:\SOFTWARE\Microsoft\VDIOptimize"
         $StartTime = Get-Date
         
         If (-not([System.Diagnostics.EventLog]::SourceExists("Virtual Desktop Optimization")))
@@ -381,6 +414,11 @@ Function Start-VDIOptimize
         If (-NOT $Quiet)
         {
             _ShowMenu -Title ("Thank you from the Virtual Desktop Optimization Team`n {0}" -f $Message) -Style Mini -DisplayOnly -Color Cyan
+        }
+
+        If ($Restart)
+        {
+            & shutdown.exe /r /t 15 /c "[VDI Optimize] Completed with -Restart parameter"
         }
     }
 }
