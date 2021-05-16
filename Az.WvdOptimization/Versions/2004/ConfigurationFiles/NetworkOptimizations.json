@@ -1,0 +1,37 @@
+[
+  {
+    "HivePath": "HKLM:\\System\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\\",
+    "KeyName": "DisableBandwidthThrottling",
+    "PropertyType": "DWORD",
+    "PropertyValue": 1,
+    "SetProperty": true
+  },
+  {
+    "HivePath": "HKLM:\\System\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\\",
+    "KeyName": "FileInfoCacheEntriesMax",
+    "PropertyType": "DWORD",
+    "PropertyValue": 1024,
+    "SetProperty": true
+  },
+  {
+    "HivePath": "HKLM:\\System\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\\",
+    "KeyName": "DirectoryCacheEntriesMax",
+    "PropertyType": "DWORD",
+    "PropertyValue": 1024,
+    "SetProperty": true
+  },
+  {
+    "HivePath": "HKLM:\\System\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\\",
+    "KeyName": "FileNotFoundCacheEntriesMax",
+    "PropertyType": "DWORD",
+    "PropertyValue": 1024,
+    "SetProperty": true
+  },
+  {
+    "HivePath": "HKLM:\\System\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters\\",
+    "KeyName": "DormantFileLimit",
+    "PropertyType": "DWORD",
+    "PropertyValue": 256,
+    "SetProperty": true
+  }
+]

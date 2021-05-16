@@ -1,0 +1,44 @@
+[
+    {
+        "Name": "Logging",
+        "Path": "C:\\",
+        "Enabled": true,
+        "Description": "Removes .tmp, .etl, .evtx, thumbcache*.db, *.log files not in use"
+    },
+    {
+        "Name": "RetailDemo",
+        "Path": "C:\\ProgramData\\Microsoft\\Windows\\RetailDemo",
+        "Enabled": true,
+        "Description": "Removes Retail Demo Content"
+    },
+    {
+        "Name": "SystemTemp",
+        "Path": "C:\\Windows\\Temp",
+        "Enabled": true,
+        "Description": "Removes System Temp files"
+    },
+    {
+        "Name": "WindowsErrorReporting",
+        "Path": "C:\\ProgramData\\Microsoft\\WER",
+        "Enabled": true,
+        "Description": "Removes Windows Error Report archives"
+    },
+    {
+        "Name": "UserTemp",
+        "Path": "None",
+        "Enabled": true,
+        "Description": "Removes files from local profile temp directory"
+    },
+    {
+        "Name": "RecycleBin",
+        "Path": "None",
+        "Enabled": true,
+        "Description": "Empties Recyle Bin"
+    },
+    {
+        "Name": "BranchCache",
+        "Path": "None",
+        "Enabled": true,
+        "Description": "Removes Branch Cache"
+    }
+]
