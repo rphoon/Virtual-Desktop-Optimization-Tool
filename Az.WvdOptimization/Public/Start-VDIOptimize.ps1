@@ -69,32 +69,75 @@ Function Start-VDIOptimize
 {
     [Cmdletbinding(DefaultParameterSetName = "Default")]
     Param (
-        [Parameter(Mandatory = $true)]
-        [System.String]$Path,    
-
         [System.String]$WindowsVersion = (Get-ItemProperty "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\").ReleaseId,
 
-        [ValidateSet('All', 'WindowsMediaPlayer', 'AppxPackages', 'ScheduledTasks', 'DefaultUserSettings', 'Autologgers', 'Services', 'NetworkOptimizations', 'LGPO', 'DiskCleanup')] 
+        [ValidateSet('All', 'WindowsMediaPlayer', 'AppxPackages', 'ScheduledTasks', 'DefaultUserSettings', 'Autologgers', 'Services', 'NetworkOptimizations', 'LocalPolicySettings', 'DiskCleanup')] 
         [String[]]$Optimizations = "All",
 
         [Switch]$Restart,
 
         [Switch]
-        $AcceptEULA
+        $AcceptEULA,
+
+        [Switch]
+        $Quiet
     )
     BEGIN
     {
         #Requires -RunAsAdministrator
-        #Requires -PSEdition Desktop
+        #Requires -PSEdition Desktop -Version 5.1
 
+        If ($Quiet)
+        {
+            $VerbosePreference = "SilentlyContinue"
+            $ErrorActionPreference = "SilentlyContinue"
+            $WarningPreference = "SilentlyContinue"
+            $ProgressPreference = "SilentlyContinue"
+            $AcceptEULA = $true
+        }
+
+        [System.Console]::WindowWidth = 140
+        [System.Console]::BufferHeight = 9999
+
+        trap [System.Management.Automation.ItemNotFoundException]
+        {
+            Write-Warning ("One or more paths were not found")
+        }
+        $source = $PSCmdlet.MyInvocation.MyCommand.ToString() -replace ("Start-","")
+        $RegPath = "HKLM:\SOFTWARE\Microsoft\VDIOptimize"
         $StartTime = Get-Date
+        
         If (-not([System.Diagnostics.EventLog]::SourceExists("Virtual Desktop Optimization")))
         {
-            New-EventLog -Source 'VDOT' -LogName 'Virtual Desktop Optimization'
-            Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message "Log Created"
+            New-EventLog -Source $source -LogName 'Virtual Desktop Optimization'
+            $Message = ("[VDI Optimize] Created Windows Event Log")
+            Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message $Message
+            Write-Verbose $Message
         }
-        Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message "Starting VDOT with the following options:`n$($PSBoundParameters | Out-String)"
-        $WorkingLocation = Join-Path -Path $Path -ChildPath $WindowsVersion
+
+        $psModPath = $env:PSModulePath.Split(";") | Get-ChildItem -Filter "Az.WvdOptimization"
+        If ($psModPath.Count -ge 1)
+        {
+            $psModPath = $psModPath | Sort-Object -Property CreationTime -Descending | Select-Object -First 1
+        }
+        Else
+        {
+            $Message = ("[VDI Optimize] Unable to find Az.WvdOptimization module path")
+            Write-EventLog -EventId 100 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Error
+            $Exception = [System.IO.DirectoryNotFoundException]::new($Message)
+            $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $Exception,
+                "ModulePathNotFound",
+                [System.Management.Automation.ErrorCategory]::ObjectNotFound,
+                "Az.WvdOptimization"
+            )
+            $PSCmdlet.ThrowTerminatingError($ErrorRecord) 
+        }
+        
+        $Message = ("[VDI Optimize] Started: {0}" -f $PSCmdlet.MyInvocation.Line)
+        Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message $Message
+        Write-Verbose $Message
+        $WorkingLocation = Join-Path -Path $psModPath.FullName -ChildPath ("Versions\{0}" -f $WindowsVersion)
     }
     PROCESS
     {
@@ -102,12 +145,14 @@ Function Start-VDIOptimize
         {
             $StartingLocation = Get-Location
             Push-Location $WorkingLocation
-            Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message ("[VDI Optimize] Found and loaded working location:`n`r{0}" -f $WorkingLocation)
+            $Message = ("[VDI Optimize] Found and loaded working location:`n`r{0}" -f $WorkingLocation)
+            Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message $Message
+            Write-Verbose $Message
         }
         Else
         {
             $Message = ("[VDI Optimize] Unable to validate working location:`n`r{0}" -f $WorkingLocation)
-            Write-EventLog -EventId 100 -Message $Message -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Error
+            Write-EventLog -EventId 100 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Error
             $Exception = [Exception]::new($Message)
             $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
                 $Exception,
@@ -118,9 +163,12 @@ Function Start-VDIOptimize
             $PSCmdlet.ThrowTerminatingError($ErrorRecord) 
         }
 
-        _ShowMenu -Title "Virtual Desktop Optimization Tool v2021.05.xx" -Style Full -Color Cyan -ClearScreen -DisplayOnly
+        If (-NOT $Quiet)
+        {
+            _ShowMenu -Title "Virtual Desktop Optimization Tool v2021.05.xx" -Style Full -Color Cyan -DisplayOnly
+        }
         
-        $EULA = Get-Content -Path ("{0}\EULA.txt" -f $Path)
+        $EULA = Get-Content -Path ("{0}\EULA.txt" -f $psModPath.FullName)
         
         If (-NOT $AcceptEULA)
         {
@@ -129,87 +177,210 @@ Function Start-VDIOptimize
             {
                 0
                 {
-                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message "EULA Accepted"
+                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message "EULA Accepted"
+                    Write-Verbose "EULA Accepted"
                 }
                 1
                 {
-                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Warning -EventId 5 -Message "EULA Declined, exiting!"
-                    Set-Location $StartingLocation
-                    $EndTime = Get-Date
-                    $ScriptRunTime = New-TimeSpan -Start $StartTime -End $EndTime
-                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message "VDOT Total Run Time: $($ScriptRunTime.Hours) Hours $($ScriptRunTime.Minutes) Minutes $($ScriptRunTime.Seconds) Seconds"
+                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 5 -Message "EULA Declined, exiting!"
+                    Write-Verbose "EULA Declined, exiting!"
                     Return
                 }
                 Default
                 {
-                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message "EULA Accepted"
+                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message "EULA Accepted"
+                    Write-Verbose "EULA Accepted"
                 }
             }
         }
         Else 
         {
-            Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message "EULA Accepted by Parameter" 
+            Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message "EULA Accepted by Parameter"
+            Write-Verbose "EULA Accepted by Parameter"
         }
 
-        If ($Optimizations -contains "WindowsMediaPlayer" -or $Optimizations -contains "All")
+        If ($Optimizations -eq "All")
+        {
+            $Optimizers = 9
+        }
+        Else {
+            $Optimizers = ($Optimizations | Measure-Object).Count
+        }
+
+        $i = 0
+        Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+        If (($Optimizations -contains "WindowsMediaPlayer" -or $Optimizations -contains "All"))
         {
             # All WindowsMediaPlayer function Event ID's [10-19]
-            _OptimizeWindowsMediaPlayer
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $WindowsMediaPlayer = Set-WindowsMediaPlayer
+            If ($WindowsMediaPlayer)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 10 -Message "[VDI Optimize] Windows Media Player optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 15 -Message "[VDI Optimize] Windows Media Player optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] WindowsMediaPlayer | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
-        If ($Optimizations -contains "AppxPackages" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "AppxPackages" -or $Optimizations -contains "All"))
         {
             # All AppxPackages function Event ID's [20-29]
-            _OptimizeAppxPackages -AppxConfigFilePath ".\ConfigurationFiles\AppxPackages.json"
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $AppxPackages = Set-AppxPackages -AppxConfigFilePath ".\ConfigurationFiles\AppxPackages.json"
+            If ($AppxPackages)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 20 -Message "[VDI Optimize] AppxPackage optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 25 -Message "[VDI Optimize] AppxPackage optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] AppxPackage | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
     
         # All ScheduledTasks function Event ID's [30-39]
-        If ($Optimizations -contains "ScheduledTasks" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "ScheduledTasks" -or $Optimizations -contains "All"))
         {
-            _OptimizeScheduledTasks -ScheduledTasksFilePath ".\ConfigurationFiles\ScheduledTasks.json"
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $ScheduledTasks = Set-ScheduledTasks -ScheduledTasksConfigFilePath ".\ConfigurationFiles\ScheduledTasks.json"
+            If ($ScheduledTasks)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 30 -Message "[VDI Optimize] ScheduledTasks optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 35 -Message "[VDI Optimize] ScheduledTasks optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] ScheduledTasks | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
 
         # All DefaultUserSettings function Event ID's [40-49]
-        If ($Optimizations -contains "DefaultUserSettings" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "DefaultUserSettings" -or $Optimizations -contains "All"))
         {
-            _OptimizeDefaultUserSettings -DefaultUserSettingsFilePath ".\ConfigurationFiles\DefaultUserSettings.json"
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $DefaultUserSettings = Set-DefaultUserSettings -DefaultUserSettingsFilePath ".\ConfigurationFiles\DefaultUserSettings.json"
+            If ($DefaultUserSettings)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 40 -Message "[VDI Optimize] DefaultUserSettings optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 45 -Message "[VDI Optimize] DefaultUserSettings optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] DefaultUserSettings | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
     
         # All AutoLoggers function Event ID's [50-59]
-        If ($Optimizations -contains "Autologgers" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "Autologgers" -or $Optimizations -contains "All"))
         {
-            _OptimizeAutoLoggers -AutoLoggersFilePath ".\ConfigurationFiles\Autologgers.json"
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $Autologgers = Set-AutoLoggers -AutoLoggersFilePath ".\ConfigurationFiles\Autologgers.json"
+            If ($Autologgers)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 50 -Message "[VDI Optimize] Autologgers optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 55 -Message "[VDI Optimize] Autologgers optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] Autologgers | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
 
         # All Services function Event ID's [60-69]
-        If ($Optimizations -contains "Services" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "Services" -or $Optimizations -contains "All"))
         {
-            _OptimizeServices -ServicesFilePath ".\ConfigurationFiles\Services.json"
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $Services = Set-Services -ServicesConfigFilePath ".\ConfigurationFiles\Services.json"
+            If ($Services)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 60 -Message "[VDI Optimize] Services optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 65 -Message "[VDI Optimize] Services optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] Services | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
 
         # All Network function Event ID's [70-79]
-        If ($Optimizations -contains "NetworkOptimizations" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "NetworkOptimizations" -or $Optimizations -contains "All"))
         {
-            _OptimizeNetwork -NetworkOptimizationsFilePath ".\ConfigurationFiles\LanManWorkstation.json"
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $NetworkOptimizations = Set-NetworkOptimizations -NetworkConfigFilePath ".\ConfigurationFiles\NetworkOptimizations.json"
+            If ($NetworkOptimizations)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 70 -Message "[VDI Optimize] NetworkOptimizations optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 75 -Message "[VDI Optimize] NetworkOptimizations optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] NetworkOptimizations | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
 
         # All LocalPolicy function Event ID's [80-89]
-        If ($Optimizations -contains "LGPO" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "LocalPolicySettings" -or $Optimizations -contains "All"))
         {
-            _OptimizeLocalPolicy -LocalPolicyFilePath ""
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $LocalPolicySettings = Set-LocalPolicySettings -LocalPolicyConfigFilePath ""
+            If ($LocalPolicySettings)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 80 -Message "[VDI Optimize] LocalPolicySettings optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 85 -Message "[VDI Optimize] LocalPolicySettings optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] LocalPolicySettings | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
 
         # All DiskCleanup function Event ID's [90-99]
-        If ($Optimizations -contains "DiskCleanup" -or $Optimizations -contains "All")
+        If (($Optimizations -contains "DiskCleanup" -or $Optimizations -contains "All"))
         {
-            _OptimizeDiskCleanup
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+            $DiskCleanup = Set-DiskCleanup -DiskConfigFilePath ".\ConfigurationFiles\DiskCleanup.json"
+            If ($DiskCleanup)
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 90 -Message "[VDI Optimize] DiskCleanup optimization was successful"
+            }
+            Else
+            {
+                Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 95 -Message "[VDI Optimize] DiskCleanup optimization threw 1 or more errors."
+                Write-Warning ("[VDI Optimize] DiskCleanup | 1 or more errors thrown, check the event log for details.")
+            }
+            $i++
+            Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
     }
-    
     END
     {
+        $EndTime = Get-Date
+        $ScriptRunTime = New-TimeSpan -Start $StartTime -End $EndTime
         $Message = ("[VDI Optimize] Total Run Time: {0}:{1}:{2}.{3}" -f $ScriptRunTime.Hours, $ScriptRunTime.Minutes, $ScriptRunTime.Seconds, $ScriptRunTime.Milliseconds)
-        Write-EventLog -LogName 'Virtual Desktop Optimization' -Source 'VDOT' -EntryType Information -EventId 1 -Message $Message
+        Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message $Message
+        Write-Verbose $Message
         Set-Location $StartingLocation
-        _ShowMenu -Title ("Thank you from the Virtual Desktop Optimization Team`n {0}" -f $Message) -Style Mini -DisplayOnly -Color Cyan
+        If (-NOT $Quiet)
+        {
+            _ShowMenu -Title ("Thank you from the Virtual Desktop Optimization Team`n {0}" -f $Message) -Style Mini -DisplayOnly -Color Cyan
+        }
     }
 }
