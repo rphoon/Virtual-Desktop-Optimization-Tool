@@ -7,6 +7,7 @@ Foreach ($Function in @($Public + $Private))
 {
     Try
     {
+        Write-Verbose ("Loading function: {0}" -f $Function.Name)
         . $Function.FullName
     }
     Catch
