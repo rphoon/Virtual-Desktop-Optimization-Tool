@@ -82,7 +82,7 @@ Function Set-DefaultUserSettings
                     }
                     $i++
                 }
-                & REG UNLOAD HKLM\VDOT_TEMP > nul
+                & REG UNLOAD HKLM\VDOT_TEMP > $null 2>&1
             }
             Else
             {
