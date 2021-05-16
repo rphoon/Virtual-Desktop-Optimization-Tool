@@ -30,19 +30,19 @@ Function Set-AppxPackages
                     try
                     {
                         $Message = ("Removing Provisioned Package: {0}" -f $Item.AppxPackage)
-                        Write-Progress -ParentId 1 -Id 20 -Activity ("AppxPackages") -CurrentOperation $Message -Status ("Working on package {0} of {1}" -f $i, $AppxPackage.Count) -PercentComplete (($i / $AppxPackage.Count) * 100)
+                        Write-Progress -ParentId 1 -Id 20 -Activity ("AppxPackages") -CurrentOperation $Message -Status ("Working on item {0} of {1}" -f $i, $AppxPackage.Count) -PercentComplete (($i / $AppxPackage.Count) * 100)
                         Write-EventLog -EventId 20 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information 
                         Write-Verbose "`t$Message"
                         Get-AppxProvisionedPackage -Online -Verbose:$false | Where-Object { $_.PackageName -like ("*{0}*" -f $Item.AppxPackage) } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Out-Null
                         
                         $Message = ("Removing 'AllUsers' Package: {0} - {1}" -f $Item.AppxPackage, $Item.Description)
-                        Write-Progress -ParentId 1 -Id 20 -Activity ("AppxPackages") -CurrentOperation $Message -Status ("Working on package {0} of {1}" -f $i, $AppxPackage.Count) -PercentComplete (($i / $AppxPackage.Count) * 100)
+                        Write-Progress -ParentId 1 -Id 20 -Activity ("AppxPackages") -CurrentOperation $Message -Status ("Working on item {0} of {1}" -f $i, $AppxPackage.Count) -PercentComplete (($i / $AppxPackage.Count) * 100)
                         Write-EventLog -EventId 20 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information 
                         Write-Verbose "`t$Message"
                         Get-AppxPackage -AllUsers -Name ("*{0}*" -f $Item.AppxPackage) -Verbose:$false | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
                         
                         $Message = ("Removing Package: {0} - {1}" -f $Item.AppxPackage, $Item.Description)
-                        Write-Progress -ParentId 1 -Id 20 -Activity ("AppxPackages") -CurrentOperation $Message -Status ("Working on package {0} of {1}" -f $i, $AppxPackage.Count) -PercentComplete (($i / $AppxPackage.Count) * 100)
+                        Write-Progress -ParentId 1 -Id 20 -Activity ("AppxPackages") -CurrentOperation $Message -Status ("Working on item {0} of {1}" -f $i, $AppxPackage.Count) -PercentComplete (($i / $AppxPackage.Count) * 100)
                         Write-EventLog -EventId 20 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information 
                         Write-Verbose "`t$Message"
                         Get-AppxPackage -Name ("*{0}*" -f $Item.AppxPackage) -Verbose:$false | Remove-AppxPackage -ErrorAction SilentlyContinue | Out-Null
