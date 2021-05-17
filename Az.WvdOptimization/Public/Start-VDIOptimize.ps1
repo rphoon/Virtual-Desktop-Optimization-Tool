@@ -153,7 +153,7 @@ Function Start-VDIOptimize
     {
         # Looks up the module path to properly set the working location for the configuration files
         # Throws an error if the module path can't be found
-        If (Get-InstalledModule -Name Az.WvdOptimization)
+        If (Get-InstalledModule -Name Az.WvdOptimization -ErrorAction SilentlyContinue)
         {
             $psModPath = (Get-InstalledModule -Name Az.WvdOptimization).InstalledLocation
         }
