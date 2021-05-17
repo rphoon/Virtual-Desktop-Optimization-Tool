@@ -153,19 +153,26 @@ Function Start-VDIOptimize
     {
         # Looks up the module path to properly set the working location for the configuration files
         # Throws an error if the module path can't be found
-        $psModPath = (Get-InstalledModule -Name Az.WvdOptimization).InstalledLocation
-        If (-NOT (Test-Path -Path $psModPath))
+        If (Get-InstalledModule -Name Az.WvdOptimization)
         {
-            $Message = ("[VDI Optimize] Unable to find Az.WvdOptimization module path")
-            Write-EventLog -EventId 100 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Error
-            $Exception = [System.IO.DirectoryNotFoundException]::new($Message)
-            $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
-                $Exception,
-                "ModulePathNotFound",
-                [System.Management.Automation.ErrorCategory]::ObjectNotFound,
-                "Az.WvdOptimization"
-            )
-            $PSCmdlet.ThrowTerminatingError($ErrorRecord) 
+            $psModPath = (Get-InstalledModule -Name Az.WvdOptimization).InstalledLocation
+        }
+        Else
+        {
+            $psModPath = ($env:PSModulePath.Split(";") | Get-ChildItem -Filter "Az.WvdOptimization" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)[0].FullName
+            If ([System.String]::IsNullOrEmpty($psModPath))
+            {
+                $Message = ("[VDI Optimize] Unable to find Az.WvdOptimization module path")
+                Write-EventLog -EventId 100 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Error
+                $Exception = [System.IO.DirectoryNotFoundException]::new($Message)
+                $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $Exception,
+                    "ModulePathNotFound",
+                    [System.Management.Automation.ErrorCategory]::ObjectNotFound,
+                    "Az.WvdOptimization"
+                )
+                $PSCmdlet.ThrowTerminatingError($ErrorRecord)
+            }
         }
         
         $Message = ("[VDI Optimize] Started: {0}" -f $PSCmdlet.MyInvocation.Line)
