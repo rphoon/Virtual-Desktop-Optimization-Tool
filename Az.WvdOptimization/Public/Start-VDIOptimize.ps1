@@ -117,9 +117,11 @@ Function Start-VDIOptimize
     )
     BEGIN
     {
+        # Requires statements: Admin, PowerShell Desktop v5.1
         #Requires -RunAsAdministrator
         #Requires -PSEdition Desktop -Version 5.1
 
+        # Checks for -Quiet parameter and forces all preferences to SilentlyContinue
         If ($Quiet)
         {
             $VerbosePreference = "SilentlyContinue"
@@ -129,17 +131,16 @@ Function Start-VDIOptimize
             $AcceptEULA = $true
         }
 
+        # Adjust console to accomodate EULA text
         [System.Console]::WindowWidth = 140
         [System.Console]::BufferHeight = 9999
 
-        trap [System.Management.Automation.ItemNotFoundException]
-        {
-            Write-Warning ("One or more paths were not found")
-        }
+        # Creates source for the Event Log to match the verb of the PowerShell command
         $source = $PSCmdlet.MyInvocation.MyCommand.ToString() -replace ("Start-","")
         #$RegPath = "HKLM:\SOFTWARE\Microsoft\VDIOptimize"
         $StartTime = Get-Date
         
+        # Checks for the Event Log and creates it if it does not exists
         If (-not([System.Diagnostics.EventLog]::SourceExists("Virtual Desktop Optimization")))
         {
             New-EventLog -Source $source -LogName 'Virtual Desktop Optimization'
@@ -147,13 +148,13 @@ Function Start-VDIOptimize
             Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message $Message
             Write-Verbose $Message
         }
-
-        $psModPath = $env:PSModulePath.Split(";") | Get-ChildItem -Filter "Az.WvdOptimization"
-        If ($psModPath.Count -ge 1)
-        {
-            $psModPath = $psModPath | Sort-Object -Property CreationTime -Descending | Select-Object -First 1
-        }
-        Else
+    }
+    PROCESS
+    {
+        # Looks up the module path to properly set the working location for the configuration files
+        # Throws an error if the module path can't be found
+        $psModPath = (Get-InstalledModule -Name Az.WvdOptimization).InstalledLocation
+        If (-NOT (Test-Path -Path $psModPath))
         {
             $Message = ("[VDI Optimize] Unable to find Az.WvdOptimization module path")
             Write-EventLog -EventId 100 -Message $Message -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Error
@@ -170,10 +171,10 @@ Function Start-VDIOptimize
         $Message = ("[VDI Optimize] Started: {0}" -f $PSCmdlet.MyInvocation.Line)
         Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message $Message
         Write-Verbose $Message
-        $WorkingLocation = Join-Path -Path $psModPath.FullName -ChildPath ("Versions\{0}" -f $WindowsVersion)
-    }
-    PROCESS
-    {
+
+        # Creates the working location for the configuration files and stores the current path to return after execution
+        # Throws an error if the working location can't be found
+        $WorkingLocation = Join-Path -Path $psModPath -ChildPath ("Versions\{0}" -f $WindowsVersion)
         If (Test-Path -Path $WorkingLocation)
         {
             $StartingLocation = Get-Location
@@ -196,13 +197,14 @@ Function Start-VDIOptimize
             $PSCmdlet.ThrowTerminatingError($ErrorRecord) 
         }
 
+        # Skips the command menu if -Quiet, else displays in the output.
         If (-NOT $Quiet)
         {
-            _ShowMenu -Title "Virtual Desktop Optimization Tool v2021.05.xx" -Style Full -Color Cyan -DisplayOnly
+            _ShowMenu -Title "Virtual Desktop Optimization Tool v2021.05.14" -Style Full -Color Cyan -DisplayOnly
         }
         
-        $EULA = Get-Content -Path ("{0}\EULA.txt" -f $psModPath.FullName)
-        
+        # Get the EULA from the text file and display it unless accepted by parameter
+        $EULA = Get-Content -Path ("{0}\EULA.txt" -f $psModPath)
         If (-NOT $AcceptEULA)
         {
             $EULA | Out-Host
@@ -210,19 +212,16 @@ Function Start-VDIOptimize
             {
                 0
                 {
+                    # EULA accepted by user
                     Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message "EULA Accepted"
                     Write-Verbose "EULA Accepted"
                 }
                 1
                 {
+                    # EULA declined by user, process ends
                     Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Warning -EventId 5 -Message "EULA Declined, exiting!"
                     Write-Verbose "EULA Declined, exiting!"
                     Return
-                }
-                Default
-                {
-                    Write-EventLog -LogName 'Virtual Desktop Optimization' -Source $source -EntryType Information -EventId 1 -Message "EULA Accepted"
-                    Write-Verbose "EULA Accepted"
                 }
             }
         }
@@ -232,6 +231,7 @@ Function Start-VDIOptimize
             Write-Verbose "EULA Accepted by Parameter"
         }
 
+        # Gets the count of which optimizations are selected for the progress bar
         If ($Optimizations -eq "All")
         {
             $Optimizers = 9
@@ -242,9 +242,12 @@ Function Start-VDIOptimize
 
         $i = 0
         Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
+        
+        # All functions should return a true / false value. Based on the return value, either write a success or failed event log
+        
+        # All WindowsMediaPlayer function Event ID's [10-19]        
         If (($Optimizations -contains "WindowsMediaPlayer" -or $Optimizations -contains "All"))
         {
-            # All WindowsMediaPlayer function Event ID's [10-19]
             Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
             $WindowsMediaPlayer = Set-WindowsMediaPlayer
             If ($WindowsMediaPlayer)
@@ -259,9 +262,10 @@ Function Start-VDIOptimize
             $i++
             Write-Progress -Id 1 -Activity ("VDI Optimization") -CurrentOperation ("Applied Configurations: {0}" -f $i) -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
         }
+        
+        # All AppxPackages function Event ID's [20-29]
         If (($Optimizations -contains "AppxPackages" -or $Optimizations -contains "All"))
         {
-            # All AppxPackages function Event ID's [20-29]
             Write-Progress -Id 1 -Activity ("VDI Optimization") -Status ("Optimizating {0} Configuration(s)" -f $Optimizers) -PercentComplete (($i/$Optimizers)*100)
             $AppxPackages = Set-AppxPackages -AppxConfigFilePath ".\ConfigurationFiles\AppxPackages.json"
             If ($AppxPackages)
